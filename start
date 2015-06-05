@@ -1,0 +1,87 @@
+#!/bin/bash
+
+readonly IMAGE="progrium/consul"
+
+cmd-run() {
+    while getopts "a:d:e:j:u:l:ch" opts; do
+        case ${opts} in
+            "a") advertise_ip="${OPTARG}:" ;;
+            "c") client_flag="True" ;;
+            "d") dns_ip="${OPTARG}:" ;;
+            "e") bootstrap_expect="${OPTARG}";;
+            "h") showhelp ;;
+            "j") join_ip="${OPTARG}" ;;
+            "l") listen_ip="${OPTARG}:" ;;
+            "u") ui_dir="${OPTARG}" ;;
+        esac
+    done
+
+    shift $((OPTIND-1))
+    docker_args=$@
+
+    if [[ -n "$advertise_ip" ]]; then
+        advertise="-advertise ${advertise_ip%:}"
+    fi
+
+    if [[ -z "$join_ip" ]]; then
+        EXPECT=${bootstrap_expect:-3}
+        run_mode="-bootstrap-expect $EXPECT"
+    else
+        OIFS=$IFS
+        IFS=,
+        for ip in $join_ip; do
+            run_mode="$run_mode -join $ip"
+        done
+        IFS=$OIFS
+    fi
+
+    if [[ -z "$client_flag" ]]; then
+        server_flag="-server"
+    fi
+
+    if [[ ! -z "$ui_dir" ]]; then
+        start_ui="-ui-dir $ui_dir"
+    fi
+
+    cat <<EOF
+eval docker run --name consul -h \$HOSTNAME \
+    -p ${advertise_ip}8300:8300 \
+    -p ${advertise_ip}8301:8301 \
+    -p ${advertise_ip}8301:8301/udp \
+    -p ${advertise_ip}8302:8302 \
+    -p ${advertise_ip}8302:8302/udp \
+    -p ${listen_ip}8400:8400 \
+    -p ${listen_ip}8500:8500 \
+    -p ${dns_ip:-127.0.0.1:}53:53/udp \
+    $docker_args \
+    $IMAGE $server_flag ${advertise} $run_mode $start_ui
+EOF
+}
+
+main() {
+    cmd-run $@
+}
+
+showhelp() {
+    echo -e "
+Usage: -a <ip> [-c|-d <ip>|-e <#>|-h|-j <ip>[,<ip>...]|-l <ip>|-u <dir>] [-- docker-run-args...]
+    -a <ip> \tAdvertise IP address: Which IP should use to advertise
+                to other consul servers.
+    -c \t\tClient flag. If set, consul will run as client.
+                This means it will not store any data (ideally for gui)
+    -d <ip> \tDNS listen IP address: Which IP should listen to serve DNS request.
+                [Default: Docker Gateway]
+    -e <#> \tNumber of bootstrap servers to expect [Default: 3].
+    -h, \tThis help.
+    -j <ip> \tJoin IP address: The IP address this consul will use to join the cluster.
+                If not set, will run as standalone. You can join to multiple servers
+                by separating each ip with a comma.
+    -l <ip> \tListen IP: Which IP should APIs (ports 8400 and 8500) listen to. [Default: 0.0.0.0]
+    -u <dir> \tEnable UI access and set which directory the ui is located [Default: /ui]
+"
+exit 0
+}
+
+main "$@"
+
+
