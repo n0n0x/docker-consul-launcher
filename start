@@ -11,7 +11,7 @@ cmd-run() {
             "e") bootstrap_expect="${OPTARG}";;
             "h") showhelp ;;
             "j") join_ip="${OPTARG}" ;;
-            "l") listen_ip="${OPTARG}:" ;;
+            "l") listen_ip="${OPTARG}" ;;
             "u") ui_dir="${OPTARG}" ;;
         esac
     done
@@ -43,6 +43,14 @@ cmd-run() {
         start_ui="-ui-dir $ui_dir"
     fi
 
+    if [[ -n "$listen_ip" ]]; then
+        for list_addr in `echo $listen_ip | tr "," " "`; do
+            LISTEN="$LISTEN -p $list_addr:8400:8400 -p $list_addr:8500:8500"
+        done
+    else
+        LISTEN="-p 8400:8400 -p 8500:8500"
+    fi
+
     cat <<EOF
 eval docker run --name consul -h \$HOSTNAME \
     -p ${advertise_ip}8300:8300 \
@@ -50,8 +58,7 @@ eval docker run --name consul -h \$HOSTNAME \
     -p ${advertise_ip}8301:8301/udp \
     -p ${advertise_ip}8302:8302 \
     -p ${advertise_ip}8302:8302/udp \
-    -p ${listen_ip}8400:8400 \
-    -p ${listen_ip}8500:8500 \
+    $LISTEN \
     -p ${dns_ip:-127.0.0.1:}53:53/udp \
     $docker_args \
     $IMAGE $server_flag ${advertise} $run_mode $start_ui
