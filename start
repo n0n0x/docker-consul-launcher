@@ -7,7 +7,7 @@ cmd-run() {
         case ${opts} in
             "a") advertise_ip="${OPTARG}:" ;;
             "c") client_flag="True" ;;
-            "d") dns_ip="${OPTARG}:" ;;
+            "d") dns_ip="${OPTARG}" ;;
             "e") bootstrap_expect="${OPTARG}";;
             "h") showhelp ;;
             "j") join_ip="${OPTARG}" ;;
@@ -45,10 +45,18 @@ cmd-run() {
 
     if [[ -n "$listen_ip" ]]; then
         for list_addr in `echo $listen_ip | tr "," " "`; do
-            LISTEN="$LISTEN -p $list_addr:8400:8400 -p $list_addr:8500:8500"
+            LISTEN_CLIENT="$LISTEN_CLIENT -p $list_addr:8400:8400 -p $list_addr:8500:8500"
         done
     else
-        LISTEN="-p 8400:8400 -p 8500:8500"
+        LISTEN_CLIENT="-p 8400:8400 -p 8500:8500"
+    fi
+
+    if [[ -n "$dns_ip" ]]; then
+        for dns_addr in `echo $dns_ip | tr "," " "`; do
+            LISTEN_DNS="$LISTEN_DNS -p $dns_addr:53:53/udp"
+        done
+    else
+        LISTEN_DNS="-p 127.0.0.1:53:53/udp"
     fi
 
     cat <<EOF
@@ -58,8 +66,8 @@ eval docker run --name consul -h \$HOSTNAME \
     -p ${advertise_ip}8301:8301/udp \
     -p ${advertise_ip}8302:8302 \
     -p ${advertise_ip}8302:8302/udp \
-    $LISTEN \
-    -p ${dns_ip:-127.0.0.1:}53:53/udp \
+    $LISTEN_CLIENT \
+    $LISTEN_DNS \
     $docker_args \
     $IMAGE $server_flag ${advertise} $run_mode $start_ui
 EOF
